@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cronnext"
+version = "0.1.0"
+description = "Compute the next fire times of a standard crontab expression."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "__GITHUB_HANDLE__" }]
+keywords = ["cron", "crontab", "schedule", "timezone", "datetime"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Systems Administration",
+    "Typing :: Typed",
+]
+dependencies = []
+
+[project.scripts]
+cronnext = "cronnext.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/__GITHUB_HANDLE__/cronnext"
+Issues = "https://github.com/__GITHUB_HANDLE__/cronnext/issues"
+
+[tool.setuptools]
+packages = ["cronnext"]

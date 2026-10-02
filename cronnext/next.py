@@ -159,6 +159,11 @@ def next_after(
     else:
         local_start = after.astimezone(zone).replace(tzinfo=None, microsecond=0)
 
+    # The horizon is fixed once, against the caller's start, so that every
+    # resumed search in the loop below is bound by the same deadline rather
+    # than sliding forward by another horizon each time.
+    last_year = local_start.year + horizon_years
+
     step = expr.resolution
     cursor = local_start
     results: List[datetime] = []
@@ -168,7 +173,7 @@ def next_after(
     # The cursor only ever moves forward and every iteration either emits a
     # result or spends an attempt, so the loop is guaranteed to terminate.
     while len(results) < count and attempts <= limit:
-        found = expr.next_after(cursor, 1, horizon_years=horizon_years)
+        found = expr.next_after(cursor, 1, horizon_years=last_year - cursor.year)
         if not found:
             break
         candidate_naive = found[0]

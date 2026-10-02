@@ -234,6 +234,36 @@ class TestFallBackFold(unittest.TestCase):
         self.assertTrue(all(not is_imaginary(moment) for moment in found))
 
 
+class TestHorizonBinding(unittest.TestCase):
+    """The caller's horizon is a deadline, not a per-lookup budget."""
+
+    def test_horizon_is_not_reapplied_on_each_resumption(self):
+        # The deadline is fixed against the caller's start; it must not
+        # slide forward by another horizon for every extra occurrence.
+        found = next_after(
+            "0 0 1 1 *", datetime(2024, 12, 31), 5, tz="UTC", horizon_years=1
+        )
+        self.assertEqual(
+            [moment.isoformat() for moment in found], ["2025-01-01T00:00:00+00:00"]
+        )
+
+    def test_shorter_horizon_yields_a_shorter_list(self):
+        # Starting in June 2024, a horizon of N years reaches 1 January of
+        # 2024+N at the earliest and excludes 1 January of 2025+N.
+        for years, expected in ((1, 1), (2, 2), (3, 3)):
+            with self.subTest(years=years):
+                found = next_after(
+                    "0 0 1 1 *", datetime(2024, 6, 1), 10, tz="UTC", horizon_years=years
+                )
+                self.assertEqual(len(found), expected)
+
+    def test_default_horizon_keeps_several_yearly_runs(self):
+        found = next_after("0 0 1 1 *", datetime(2024, 6, 1), 3, tz="UTC")
+        self.assertEqual(
+            [moment.year for moment in found], [2025, 2026, 2027]
+        )
+
+
 class TestTimezoneMonotonicity(unittest.TestCase):
     """Results stay ordered through every transition."""
 

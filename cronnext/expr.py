@@ -247,7 +247,7 @@ class CronExpr:
 
         results: List[datetime] = []
         while cursor.year <= last_year:
-            moment = self._advance(cursor)
+            moment = self._advance(cursor, last_year)
             if moment is None or moment.year > last_year:
                 break
             results.append(moment)
@@ -256,24 +256,33 @@ class CronExpr:
             cursor = moment + self.resolution
         return results
 
-    def _advance(self, cursor: datetime) -> Optional[datetime]:
-        """Return the first occurrence strictly at or after ``cursor``.
+    def _advance(self, cursor: datetime, limit_year: int) -> Optional[datetime]:
+        """Return the first occurrence at or after ``cursor``.
 
         Every branch either confirms the moment or jumps it forward past
         time that provably cannot match, so the caller only ever sees a
         moment that satisfies every field.
 
+        Args:
+            cursor: Naive wall clock moment to search from, inclusive.
+            limit_year: Largest year the caller is willing to return.
+
         Returns:
             The occurrence, or None when the moment could not be confirmed
-            within the caller's bound.
+            within ``limit_year``.  None is returned for expressions that
+            can never fire, such as ``0 0 30 2 *``, which would otherwise
+            walk the calendar to the year 10000 and overflow.
         """
         moment = cursor
         while True:
             if not self.months.contains(moment.month):
                 following = self.months.next_after(moment.month)
+                year = moment.year if following is not None else moment.year + 1
+                if year > limit_year:
+                    return None
                 if following is None:
                     moment = moment.replace(
-                        year=moment.year + 1,
+                        year=year,
                         month=1,
                         day=1,
                         hour=0,
@@ -283,6 +292,7 @@ class CronExpr:
                     )
                 else:
                     moment = moment.replace(
+                        year=year,
                         month=following,
                         day=1,
                         hour=0,
@@ -293,6 +303,8 @@ class CronExpr:
                 continue
 
             if not self.day_matches(moment):
+                if moment.year > limit_year:
+                    return None
                 moment = (moment + timedelta(days=1)).replace(
                     hour=0, minute=0, second=0, microsecond=0
                 )
@@ -301,6 +313,8 @@ class CronExpr:
             if not self.hours.contains(moment.hour):
                 following = self.hours.next_after(moment.hour)
                 if following is None:
+                    if moment.year > limit_year:
+                        return None
                     moment = (moment + timedelta(days=1)).replace(
                         hour=0, minute=0, second=0, microsecond=0
                     )
@@ -313,8 +327,13 @@ class CronExpr:
             if not self.minutes.contains(moment.minute):
                 following = self.minutes.next_after(moment.minute)
                 if following is None:
-                    moment = (moment + timedelta(days=1)).replace(
-                        hour=0, minute=0, second=0, microsecond=0
+                    # No later minute matches today; the next hour may still
+                    # carry a matching minute such as :00, so step there and
+                    # let the loop re-check rather than skipping a whole day.
+                    if moment.year > limit_year:
+                        return None
+                    moment = (moment + timedelta(hours=1)).replace(
+                        minute=0, second=0, microsecond=0
                     )
                     continue
                 moment = moment.replace(minute=following, second=0, microsecond=0)
@@ -323,6 +342,8 @@ class CronExpr:
             if self.seconds is not None and not self.seconds.contains(moment.second):
                 following = self.seconds.next_after(moment.second)
                 if following is None:
+                    if moment.year > limit_year:
+                        return None
                     moment = (moment + timedelta(minutes=1)).replace(
                         second=0, microsecond=0
                     )
