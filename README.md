@@ -4,6 +4,38 @@ Compute the next fire times of a standard crontab expression, with correct
 vixie-cron semantics, a timezone aware library API and a command line tool.
 Pure standard library, no dependencies.
 
+<!-- hero -->
+
+[![CI](https://github.com/cronnext/actions/workflows/ci.yml/badge.svg)](https://github.com/cronnext/actions/workflows/ci.yml)
+![python 3.11 – 3.13](https://img.shields.io/badge/python-3.11–3.13-blue)
+![MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+![dependencies](https://img.shields.io/badge/dependencies-none-2f6f4f)
+
+## Contents
+
+- [What it is](#what-it-is)
+- [Semantics implemented](#semantics-implemented)
+  - [Field syntax](#field-syntax)
+  - [Day-of-month and day-of-week combine with OR](#day-of-month-and-day-of-week-combine-with-or)
+  - [Seconds field](#seconds-field)
+  - [Aliases](#aliases)
+- [Supported fields](#supported-fields)
+- [Aliases table](#aliases-table)
+- [Install](#install)
+- [Usage](#usage)
+  - [Default output](#default-output)
+  - [Weekdays only](#weekdays-only)
+  - [Timezone and table output](#timezone-and-table-output)
+  - [Sparse schedules](#sparse-schedules)
+  - [Exit status](#exit-status)
+  - [The search horizon](#the-search-horizon)
+- [Timezone behaviour](#timezone-behaviour)
+- [Library API](#library-api)
+- [Running the tests](#running-the-tests)
+- [License](#license)
+
+<!-- /hero -->
+
 ## What it is
 
 `cronnext` answers one question: when does this crontab line next run?
