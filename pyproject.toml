@@ -9,7 +9,7 @@ description = "Compute the next fire times of a standard crontab expression."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
-authors = [{ name = "__GITHUB_HANDLE__" }]
+authors = [{ name = "xwellames" }]
 keywords = ["cron", "crontab", "schedule", "timezone", "datetime"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -31,8 +31,8 @@ dependencies = []
 cronnext = "cronnext.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/__GITHUB_HANDLE__/cronnext"
-Issues = "https://github.com/__GITHUB_HANDLE__/cronnext/issues"
+Homepage = "https://github.com/xwellames/cronnext"
+Issues = "https://github.com/xwellames/cronnext/issues"
 
 [tool.setuptools]
 packages = ["cronnext"]
