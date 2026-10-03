@@ -21,9 +21,11 @@ field is a comma separated list of items, every item is one of
 Month names (``JAN``..``DEC``) and weekday names (``SUN``..``SAT``) are
 accepted wherever a number is accepted, case-insensitively.  In the
 day-of-week field both ``0`` and ``7`` denote Sunday; they are normalised to
-``0``.  Every produced :class:`Field` reports ``star=True`` only when it was
-written as a bare ``*``, which is what the day-of-month / day-of-week rule
-in :mod:`cronnext.expr` needs.
+``0``.  Every produced :class:`Field` reports ``star=True`` when its text
+begins with ``*``, which is what the day-of-month / day-of-week rule in
+:mod:`cronnext.expr` needs: vixie-cron's parser tests the field's first
+character before it expands anything, so ``*/2`` and ``*,7`` are wildcards
+as well.
 """
 
 from __future__ import annotations
@@ -85,7 +87,7 @@ class Field:
         minimum: Smallest legal value of the field.
         maximum: Largest legal value of the field.
         values: Normalised frozenset of accepted values.
-        star: True when the field was written as a bare ``*``.
+        star: True when the field text begins with ``*``.
         text: The original field text, stripped.
     """
 
@@ -141,15 +143,20 @@ class Field:
             star_maximum = maximum
 
         values: set[int] = set()
-        star = True
         for item in raw.split(","):
             if not item:
                 raise FieldError(f"{name} field {text!r} has an empty list element")
-            item_values, item_is_star = cls._parse_item(
+            values |= cls._parse_item(
                 name, item, minimum, maximum, names, star_maximum
             )
-            values |= item_values
-            star = star and item_is_star
+
+        # vixie-cron decides "this field is a wildcard" from the raw text,
+        # before any list expansion: entry.c tests ``ch == '*'`` on the first
+        # character of the field and sets DOM_STAR / DOW_STAR accordingly.
+        # That makes ``*/2`` and ``*,7`` wildcards too, which matters because
+        # cron.c switches the day-of-month / day-of-week rule to AND as soon
+        # as either flag is set.
+        star = raw.startswith("*")
 
         if not values:
             raise FieldError(f"{name} field {text!r} matches no values")
@@ -174,8 +181,8 @@ class Field:
         maximum: int,
         names: Optional[Dict[str, int]],
         star_maximum: int,
-    ) -> Tuple[set[int], bool]:
-        """Parse one comma separated item into its values and star flag."""
+    ) -> set[int]:
+        """Parse one comma separated item into its values."""
         body = item
         step = 1
         if "/" in item:
@@ -187,9 +194,7 @@ class Field:
 
         if body == "*":
             low, high = minimum, star_maximum
-            bare_star = step == 1
         elif "-" in body:
-            bare_star = False
             if body.startswith("-") or body.endswith("-"):
                 raise FieldError(f"{name} field item {item!r} has an incomplete range")
             low_text, high_text = body.split("-", 1)
@@ -200,15 +205,11 @@ class Field:
             low = cls._parse_value(name, item, low_text, minimum, maximum, names)
             high = cls._parse_value(name, item, high_text, minimum, maximum, names)
         else:
-            bare_star = False
             low = cls._parse_value(name, item, body, minimum, maximum, names)
             # ``a/n`` is vixie-cron shorthand for ``a-<maximum>/n``.
             high = star_maximum if step > 1 else low
 
-        return (
-            cls._expand(name, item, low, high, step, minimum, star_maximum),
-            bare_star,
-        )
+        return cls._expand(name, item, low, high, step, minimum, star_maximum)
 
     @staticmethod
     def _parse_step(name: str, item: str, step_text: str) -> int:

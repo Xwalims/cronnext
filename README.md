@@ -70,9 +70,13 @@ Each field is a comma separated list of items. An item is one of:
 | `a/n` | vixie-cron shorthand for `a-<maximum>/n` |
 
 A range whose lower bound is above its upper bound wraps around the end of
-the field, exactly as vixie-cron does. `5-1` in the day-of-week field is
-Friday, Saturday, Sunday, Monday. When such a wrapped range carries a step,
-the step is applied to the wrapped sequence, so `5-1/2` is Friday and Sunday.
+the field. `5-1` in the day-of-week field is Friday, Saturday, Sunday, Monday.
+When such a wrapped range carries a step, the step is applied to the wrapped
+sequence, so `5-1/2` is Friday and Sunday.
+
+This wrap is a `cronnext` extension, not vixie-cron behaviour. vixie's
+`get_range()` rejects a descending range outright (`if (ch == EOF || num1 >
+num2) return (EOF);`), and cronie only special-cases `x-0` into `x-7`.
 
 Month names `JAN` through `DEC` and weekday names `SUN` through `SAT` are
 accepted wherever a number is accepted, in any case. In the day-of-week
@@ -80,17 +84,19 @@ field both `0` and `7` mean Sunday and are normalised to `0`.
 
 ### Day-of-month and day-of-week combine with OR
 
-This is the rule that catches people out. When **both** the day-of-month and
-the day-of-week fields are restricted, a day matches when **either one**
+This is the rule that catches people out. When **neither** the day-of-month
+nor the day-of-week field is a wildcard, a day matches when **either one**
 matches. `0 0 13 * FRI` runs on every Friday *and* on the 13th of every
 month, not only on days that are both.
 
-When one of the two fields is a bare `*`, only the other field is consulted,
-which means `0 0 1 * 0` (the first of the month, or any Sunday) really does
-fire on every Sunday of the month.
+When **either** field is a wildcard the rule flips to AND. `0 0 1 * 0` (the
+first of the month, or any Sunday) really does fire on every Sunday of the
+month, because `*` matches every day and the Sunday half still has to agree.
 
-A field counts as "restricted" only when it is written as something other
-than a bare `*`. `*/2` is restricted; `*` is not.
+"Wildcard" is a property of the field *text*, not of the values it expands
+to. vixie's parser tests the field's first character before it expands
+anything, so `*/2` and `*,7` are wildcards too: `0 0 */2 * 1` means "an odd
+day of the month **and** a Monday", not "an odd day, or any Monday".
 
 ### Seconds field
 

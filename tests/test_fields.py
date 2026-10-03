@@ -86,8 +86,14 @@ class TestLists(unittest.TestCase):
     def test_list_mixed_with_star(self):
         self.assertEqual(minute_field("*,7").sorted_values(), tuple(range(60)))
 
-    def test_list_with_one_star_is_not_star_flag(self):
-        self.assertFalse(minute_field("*,7").star)
+    def test_list_with_leading_star_is_a_wildcard(self):
+        # vixie-cron entry.c tests ``ch == '*'`` on the field's first
+        # character before it ever looks at the rest of the list, so a field
+        # that merely *starts* with a star is a wildcard even though its
+        # expanded values are narrowed by the extra items.
+        self.assertTrue(minute_field("*,7").star)
+        self.assertTrue(minute_field("*/2").star)
+        self.assertTrue(minute_field("*,7,9").star)
 
     def test_long_list(self):
         self.assertEqual(len(minute_field("1,3,5,7,9,11").values), 6)

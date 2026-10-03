@@ -184,22 +184,28 @@ class CronExpr:
     def day_matches(self, moment: datetime) -> bool:
         """Return True when the day part of the expression matches.
 
-        vixie-cron treats day-of-month and day-of-week as a union when both
-        fields are restricted: a day matches when *either* field matches.
-        When one of the two fields is a bare ``*`` only the other one is
-        consulted, so ``0 0 1 * 0`` (the first of the month, or any Sunday)
-        really does fire on every Sunday.
+        vixie-cron combines the two day fields with a single rule, and cron.c
+        spells it out::
+
+            ((e->flags & (DOM_STAR|DOW_STAR)) != 0)
+                 ? (thisdom && thisdow)
+                 : (thisdom || thisdow)
+
+        So the day matches when **either** field is a wildcard, and only then
+        is the match an AND.  With neither field a wildcard it is an OR, which
+        is why ``0 0 1 * 0`` (the first of the month, or any Sunday) really
+        does fire on every Sunday.
+
+        "Wildcard" here is a property of the field *text*, not of its
+        expanded values: entry.c tests ``ch == '*'`` on the field's first
+        character, so ``*/2`` and ``*,7`` are wildcards as well.  ``0 0 */2 *
+        1`` therefore means "an odd day of the month **and** a Monday", not
+        "an odd day, or any Monday".
         """
-        month_star = self.days_of_month.star
-        week_star = self.days_of_week.star
-        if month_star and week_star:
-            return True
         by_month = self.days_of_month.contains(moment.day)
         by_week = self.days_of_week.contains(cron_dow(moment))
-        if month_star:
-            return by_week
-        if week_star:
-            return by_month
+        if self.days_of_month.star or self.days_of_week.star:
+            return by_month and by_week
         return by_month or by_week
 
     # -- forward search --------------------------------------------------
