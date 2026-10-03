@@ -164,7 +164,6 @@ def next_after(
     # than sliding forward by another horizon each time.
     last_year = local_start.year + horizon_years
 
-    step = expr.resolution
     cursor = local_start
     results: List[datetime] = []
     seen: Set[datetime] = set()
@@ -177,7 +176,14 @@ def next_after(
         if not found:
             break
         candidate_naive = found[0]
-        cursor = candidate_naive + step
+        # The cursor resumes at the candidate itself, NOT one step past it:
+        # expr.next_after is already strictly after its argument, so advancing
+        # the cursor by a step here would skip a whole extra interval on every
+        # iteration. For an expression whose occurrences sit exactly one
+        # resolution apart -- "* * * * *" is the everyday case, and any
+        # six-field expression with a contiguous seconds field -- that dropped
+        # every other occurrence, in every timezone including UTC.
+        cursor = candidate_naive
         attempts += 1
 
         local = candidate_naive.replace(tzinfo=zone, fold=0)

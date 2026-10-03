@@ -105,6 +105,10 @@ several modern crontab implementations. `*/30 * * * * *` means every 30
 seconds, and the whole field set shifts: seconds, minute, hour, day of
 month, month, day of week.
 
+Occurrences are enumerated one resolution step at a time, so a rule whose
+successive runs are exactly one step apart is reported in full: `* * * * *`
+yields every minute, not every other one.
+
 ### Aliases
 
 The standard nicknames are supported and expand exactly as in vixie-cron.

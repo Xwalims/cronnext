@@ -264,6 +264,85 @@ class TestHorizonBinding(unittest.TestCase):
         )
 
 
+class TestDenseSchedules(unittest.TestCase):
+    """Expressions whose occurrences sit exactly one resolution apart.
+
+    Every other class here uses a sparse rule -- ``0 2 * * *``, ``0 * * * *``
+    -- whose occurrences are hours or days apart. For those, advancing a
+    cursor past an occurrence costs nothing, because the next one is far away
+    anyway. A rule like ``* * * * *`` is different: consecutive occurrences
+    are one minute apart, so any extra step in the cursor silently drops half
+    of them. That is invisible to a count check (the count still comes back
+    full) and to a monotonicity check (the survivors are still in order); only
+    comparing the actual times catches it.
+    """
+
+    def _naive_local(self, expression, start, count):
+        """Every matching local minute in ``start``, computed without the loop."""
+        expr = CronExpr.parse(expression)
+        out = []
+        moment = start + expr.resolution
+        while len(out) < count:
+            if expr.matches(moment) and not is_imaginary(
+                moment.replace(tzinfo=ZoneInfo("UTC"))
+            ):
+                out.append(moment)
+            moment += expr.resolution
+        return out
+
+    def test_every_minute_in_utc_is_not_alternated_away(self):
+        found = next_after("* * * * *", datetime(2024, 3, 30, 0, 0), 6, tz="UTC")
+        self.assertEqual(
+            [moment.strftime("%H:%M") for moment in found],
+            ["00:01", "00:02", "00:03", "00:04", "00:05", "00:06"],
+        )
+
+    def test_every_minute_matches_the_naive_scan(self):
+        start = datetime(2024, 3, 30, 0, 0)
+        found = next_after("* * * * *", start, 30, tz="UTC")
+        self.assertEqual(
+            [moment.replace(tzinfo=None) for moment in found],
+            self._naive_local("* * * * *", start, 30),
+        )
+
+    def test_contiguous_seconds_field_is_also_dense(self):
+        # A six-field expression resolves to seconds, so "0-59 * * * * *" is
+        # every second and hits the same one-step window from the other side.
+        start = datetime(2024, 3, 30, 0, 0, 0)
+        found = next_after("0-59 * * * * *", start, 6, tz="UTC")
+        self.assertEqual(
+            [moment.second for moment in found], [1, 2, 3, 4, 5, 6]
+        )
+
+    def test_dense_schedule_agrees_across_a_dst_transition(self):
+        # Berlin skips 02:00-02:59 on 31 March 2024. The reported times must be
+        # exactly the matching minutes that really exist, with the missing hour
+        # absent rather than renumbered.
+        start = datetime(2024, 3, 31, 1, 57, tzinfo=ZoneInfo(BERLIN))
+        found = next_after("* * * * *", start.replace(tzinfo=None), 5, tz=BERLIN)
+        stamps = [moment.strftime("%H:%M %z") for moment in found]
+        self.assertEqual(
+            stamps,
+            [
+                "01:58 +0100",
+                "01:59 +0100",
+                "03:00 +0200",
+                "03:01 +0200",
+                "03:02 +0200",
+            ],
+        )
+
+    def test_dense_schedule_is_not_reported_as_fully_matching(self):
+        # Count is honoured, but the times are the point: an implementation
+        # that skips every other minute still returns `count` results.
+        start = datetime(2024, 3, 30, 0, 0)
+        found = next_after("* * * * *", start, 8, tz="UTC")
+        minutes = [moment.minute for moment in found]
+        self.assertEqual(minutes, sorted(minutes))
+        self.assertEqual(len(set(minutes)), 8)
+        self.assertEqual(minutes[-1] - minutes[0], 7)
+
+
 class TestTimezoneMonotonicity(unittest.TestCase):
     """Results stay ordered through every transition."""
 
