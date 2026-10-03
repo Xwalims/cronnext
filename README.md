@@ -6,7 +6,7 @@ Pure standard library, no dependencies.
 
 <!-- hero -->
 
-[![CI](https://github.com/cronnext/actions/workflows/ci.yml/badge.svg)](https://github.com/cronnext/actions/workflows/ci.yml)
+[![CI](https://github.com/Xwalims/cronnext/actions/workflows/ci.yml/badge.svg)](https://github.com/Xwalims/cronnext/actions/workflows/ci.yml)
 ![python 3.11 – 3.13](https://img.shields.io/badge/python-3.11–3.13-blue)
 ![MIT](https://img.shields.io/badge/license-MIT-blue.svg)
 ![dependencies](https://img.shields.io/badge/dependencies-none-2f6f4f)
