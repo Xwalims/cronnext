@@ -10,13 +10,16 @@ field is a comma separated list of items, every item is one of
     a single value
 ``a-b``
     an inclusive range; when ``a > b`` the range wraps around the end of the
-    field (``5-2`` in the day-of-week field is Fri, Sat, Sun, Mon)
+    field (``5-2`` in the day-of-week field is Fri, Sat, Sun, Mon).  vixie
+    neither wraps nor rejects such a range: its fill loop simply does not run,
+    so the field keeps no bits and the job never fires
 ``*/n``
     the whole range restricted to every ``n``-th value
 ``a-b/n``
     a range restricted to every ``n``-th value
 ``a/n``
-    vixie-cron shorthand for ``a-<maximum>/n``
+    shorthand for ``a-<maximum>/n``.  Upstream vixie stops at the single value
+    ``a`` here, so this too is a ``cronnext`` extension
 
 Month names (``JAN``..``DEC``) and weekday names (``SUN``..``SAT``) are
 accepted wherever a number is accepted, case-insensitively.  In the
@@ -206,7 +209,9 @@ class Field:
             high = cls._parse_value(name, item, high_text, minimum, maximum, names)
         else:
             low = cls._parse_value(name, item, body, minimum, maximum, names)
-            # ``a/n`` is vixie-cron shorthand for ``a-<maximum>/n``.
+            # ``a/n`` is read as the ``a-<maximum>/n`` shorthand.  Upstream
+            # vixie stops at the single value ``a`` instead, and Debian
+            # rejects the line outright; this is a documented extension.
             high = star_maximum if step > 1 else low
 
         return cls._expand(name, item, low, high, step, minimum, star_maximum)

@@ -1,8 +1,10 @@
 # cronnext
 
-Compute the next fire times of a standard crontab expression, with correct
-vixie-cron semantics, a timezone aware library API and a command line tool.
-Pure standard library, no dependencies.
+Compute the next fire times of a standard crontab expression, following
+vixie-cron semantics, with a timezone aware library API and a command line
+tool. Pure standard library, no dependencies. Where vixie-cron's own behaviour
+is surprising, or where this library deliberately extends it, the README says
+so explicitly rather than glossing over it.
 
 <!-- hero -->
 
@@ -67,16 +69,35 @@ Each field is a comma separated list of items. An item is one of:
 | `a-b` | the inclusive range `a` to `b` |
 | `*/n` | every `n`-th value across the field |
 | `a-b/n` | every `n`-th value within the range |
-| `a/n` | vixie-cron shorthand for `a-<maximum>/n` |
+| `a/n` | shorthand for `a-<maximum>/n`; vixie-cron does not do this |
 
 A range whose lower bound is above its upper bound wraps around the end of
 the field. `5-1` in the day-of-week field is Friday, Saturday, Sunday, Monday.
 When such a wrapped range carries a step, the step is applied to the wrapped
 sequence, so `5-1/2` is Friday and Sunday.
 
-This wrap is a `cronnext` extension, not vixie-cron behaviour. vixie's
-`get_range()` rejects a descending range outright (`if (ch == EOF || num1 >
-num2) return (EOF);`), and cronie only special-cases `x-0` into `x-7`.
+This wrap is a `cronnext` extension. vixie-cron has no such behaviour, and it
+does not reject the range either: upstream `get_range()` fills the field with
+
+```c
+for (i = num1;  i <= num2;  i += num3)
+        if (EOF == set_element(bits, low, high, i))
+                return EOF;
+```
+
+so a descending range simply sets no bits. The crontab line still parses and
+is accepted, and the job then never runs, without a word of complaint from
+cron. Verified against vixie-cron 3.0pl1 built from the upstream tarball and
+against Debian's 3.0pl1-184ubuntu2: `0 0 * * 5-1`, `0 0 * * 6-0` and
+`0 0 * * 5-1/2` all fire 0 times across 365 days of 2026, while `0 0 * * 1`
+fires 52 times.
+
+`a/n` is a further divergence. Upstream vixie stops at the first number after
+a non-`*` item, so `5/2` is the single minute 5 and never the sequence 5,7,9;
+Debian added an explicit "step specified without range" check, which rejects
+the line outright. `cronnext` takes the third course and treats `a/n` as the
+`a-<maximum>/n` shorthand that other implementations document, which is why
+`0/2` gives 0, 2, 4, ... rather than upstream's single value 0.
 
 Month names `JAN` through `DEC` and weekday names `SUN` through `SAT` are
 accepted wherever a number is accepted, in any case. In the day-of-week

@@ -45,9 +45,16 @@ _DOW_MIN, _DOW_MAX = 0, 7
 def _expand_item(item, low_limit, high_limit):
     """Expand one list item, or return None when vixie would reject it.
 
-    ``get_range()`` bails out with ``if (ch == EOF || num1 > num2) return
-    (EOF);``, so a descending range such as ``5-1`` is a *syntax error* in
-    vixie, not a wrapped range.
+    A descending range such as ``5-1`` is *not* a syntax error in vixie, and
+    vixie does not wrap it either.  Upstream ``get_range()`` fills the field
+    with ``for (i = num1; i <= num2; i += num3)``, which simply does not
+    execute when ``num1 > num2``, so the field ends up with no bits set.  The
+    entry still parses; the job just never fires.  Debian's 3.0pl1 keeps the
+    same loop and adds only an out-of-bounds check around it, so it behaves
+    identically here.
+
+    Returning an empty set rather than None encodes exactly that: the range is
+    accepted and matches nothing.
     """
     step = 1
     body = item
@@ -65,16 +72,17 @@ def _expand_item(item, low_limit, high_limit):
         if not low_text.isdigit() or not high_text.isdigit():
             return None
         low, high = int(low_text), int(high_text)
-        if low > high:
-            return None  # vixie rejects; it does not wrap.
     else:
         if not body.isdigit():
             return None
         low = int(body)
-        # ``a/n`` is shorthand for ``a-<maximum>/n``.
+        # ``a/n``: upstream stops at the single value ``a``; the
+        # ``a-<maximum>/n`` reading is a cronnext extension.
         high = high_limit if step > 1 else low
     if low < low_limit or high > high_limit:
         return None
+    if low > high:
+        return set()
     return {
         low + offset
         for offset in range(0, high - low + 1, step)
@@ -83,7 +91,11 @@ def _expand_item(item, low_limit, high_limit):
 
 
 def _expand(field_text, low_limit, high_limit):
-    """Expand a whole field, or return None when vixie would reject it."""
+    """Expand a whole field, or return None when vixie would reject it.
+
+    An empty set is a real answer, not a rejection: vixie accepts a field whose
+    items set no bits and the job then never fires.
+    """
     values = set()
     for item in field_text.split(","):
         if not item:
@@ -92,7 +104,7 @@ def _expand(field_text, low_limit, high_limit):
         if expanded is None:
             return None
         values |= expanded
-    return values or None
+    return values
 
 
 def vixie_accepts(dom_text, dow_text):

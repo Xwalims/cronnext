@@ -38,12 +38,19 @@ DAY_FIELDS = [
     ("*", "*/2"),
     ("7", "*"),
     ("*", "7"),
-    ("*", "6-0"),
-    ("1", "6-0"),
     ("1", "*/7"),
     ("*", "*/7"),
     ("*/3", "1,15"),
 ]
+
+#: Day-field pairs that exercise a documented cronnext extension rather than
+#: vixie behaviour, so there is no vixie verdict to compare against.
+#:
+#: ``6-0`` is a descending range.  vixie parses it and sets no bits, so the
+#: job never fires; cronnext wraps it to Sat, Sun.  Confirmed against both
+#: vixie-cron 3.0pl1 builds: 0 firings over a year.  The dedicated
+#: TestDescendingRangesDifferFromVixie class pins this divergence directly.
+EXTENSION_ONLY = {("*", "6-0"), ("1", "6-0")}
 
 
 def _days(start, count):
@@ -56,6 +63,8 @@ class TestDayRuleMatchesVixie(unittest.TestCase):
     def test_agrees_over_a_whole_leap_year(self):
         mismatches = []
         for dom_text, dow_text in DAY_FIELDS:
+            if (dom_text, dow_text) in EXTENSION_ONLY:
+                continue
             if not vixie_accepts(dom_text, dow_text):
                 # vixie rejects this pair outright, so there is no behaviour
                 # to compare against; a separate test covers acceptance.
@@ -123,29 +132,57 @@ class TestDayRuleMatchesVixie(unittest.TestCase):
 class TestDescendingRangesDifferFromVixie(unittest.TestCase):
     """cronnext's wrapped range is an extension, not vixie behaviour.
 
-    vixie-cron rejects a descending range outright::
+    vixie-cron neither wraps nor rejects a descending range.  Upstream
+    ``get_range()`` ends with::
 
-        if (ch == EOF || num1 > num2)
-                return (EOF);
+        for (i = num1;  i <= num2;  i += num3)
+                if (EOF == set_element(bits, low, high, i))
+                        return EOF;
 
-    and cronie only special-cases ``x-0`` into ``x-7``.  Neither wraps
-    ``5-1`` around to Fri, Sat, Sun, Mon.  These tests pin the *documented*
-    extension so it cannot drift silently; they deliberately do not compare
-    against the oracle, because there is no vixie behaviour to match.
+    which never executes when ``num1 > num2``, so the field keeps no bits at
+    all.  The line parses, is accepted, and the job never runs.  This was
+    checked against vixie-cron 3.0pl1 built from the upstream tarball and
+    against Debian's 3.0pl1-184ubuntu2: ``0 0 * * 5-1``, ``0 0 * * 6-0`` and
+    ``0 0 * * 5-1/2`` fire 0 times over 365 days of 2026, while ``0 0 * * 1``
+    fires 52 times.
+
+    These tests pin the *documented* extension so it cannot drift silently;
+    they deliberately do not compare occurrences against the oracle, because
+    vixie has no occurrence to compare against.
     """
 
-    def test_vixie_rejects_descending_range(self):
-        self.assertFalse(vixie_accepts("*", "5-1"))
-        self.assertFalse(vixie_accepts("*", "6-0"))
+    def test_vixie_accepts_a_descending_range(self):
+        # Accepted as syntax, but it selects nothing -- that is the distinction
+        # the previous version of this test got wrong by calling it a syntax
+        # error.  vixie_accepts() must therefore say yes...
+        self.assertTrue(vixie_accepts("*", "5-1"))
+        self.assertTrue(vixie_accepts("*", "6-0"))
+        # ...while the day rule must then never match on account of it.
+        for weekday in range(7):
+            self.assertFalse(
+                vixie_day_matches("*", "5-1", 15, weekday),
+                f"descending 5-1 matched on weekday {weekday}",
+            )
+
+    def test_a_descending_element_empties_only_its_own_field(self):
+        # vixie sets bits per item, so a list keeps the bits from its valid
+        # elements: '1,5-1' still means every Monday.
+        for weekday in range(7):
+            expected = weekday == 1
+            self.assertEqual(
+                vixie_day_matches("*", "1,5-1", 15, weekday), expected
+            )
 
     def test_cronnext_wraps_as_documented(self):
-        # README: "A range whose lower bound is above its upper bound wraps
-        # around the end of the field, exactly as vixie-cron does."
-        # That last clause is wrong -- see the note above.
         expr = CronExpr.parse("0 0 * * 5-1")
         self.assertEqual(
             sorted(expr.days_of_week.values), [0, 1, 5, 6]
         )
+
+    def test_cronnext_wrap_survives_a_step(self):
+        # README: '5-1/2' is Friday and Sunday.
+        expr = CronExpr.parse("0 0 * * 5-1/2")
+        self.assertEqual(sorted(expr.days_of_week.values), [0, 5])
 
 
 if __name__ == "__main__":
