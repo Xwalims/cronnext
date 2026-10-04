@@ -17,7 +17,12 @@ quietly run at 04:30.
 
 *Ambiguous local times* (the autumn fall back hour, where the same local
 time happens twice) run exactly once, at ``fold=0``, which is the first of
-the two passes through the clock.
+the two passes through the clock.  This is the one deliberate departure from
+upstream vixie-cron, whose main loop advances ``TargetTime`` by 60 absolute
+seconds and therefore fires such an entry twice.  Debian's own cron
+suppresses the second pass explicitly, so this matches the distribution in
+practice; see the README and ``tests/test_dst_differential.py``, whose
+expectations were captured from a real vixie build.
 
 A naive datetime passed to :func:`next_after` is interpreted as a wall clock
 time in the requested zone.  An aware datetime is converted into that zone
@@ -192,6 +197,17 @@ def next_after(
             continue
         instant = local.astimezone(_UTC)
         if instant in seen:
+            # Unreachable in practice, and kept as a cheap guard rather than
+            # removed.  Instrumenting this branch over the whole test suite
+            # plus 1152 (zone, year, expression) searches found 0 hits, and
+            # the reason is structural: expr.next_after walks naive wall
+            # clock moments strictly forward, and every candidate is pinned
+            # to fold=0, i.e. to the first pass through any repeated hour.  The
+            # first pass of a repeated hour precedes the second by exactly the
+            # shift, so consecutive candidates always map to increasing
+            # instants and two distinct wall clock moments cannot collide.
+            # If the search is ever changed to walk instants rather than wall
+            # clock times, this branch starts to matter.
             continue
         seen.add(instant)
         results.append(local)

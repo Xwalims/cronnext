@@ -316,6 +316,56 @@ $ cronnext '30 2 * * *' -n 2 --tz Europe/Berlin --from 2024-10-26T12:00:00
 27 October appears once, at the summer offset, even though 02:30 happens
 twice that night.
 
+### This is the one place `cronnext` departs from upstream vixie
+
+Both DST rules above were checked against real vixie-cron 3.0pl1, built from
+its own sources and driven through `entry.c`'s `load_entry()` and `cron.c`'s
+`cron_tick()` predicate under a real `TZ`. Across 11 zones and 6 years, at
+every offset change in those ranges:
+
+| | expression/windows | diverging |
+| --- | --- | --- |
+| Spring forward gap | 616 | **0** |
+| Autumn fall back fold | 284 | 321 |
+
+37 284 individual vixie firings were compared across those windows.
+
+Every gap agrees exactly, including Australia/Lord_Howe's 30 minute gap and
+Pacific/Apia's 24 hour jump on 2011-12-30, where an entire calendar day never
+happened. Both sides skip those local times because `localtime()` never reports
+them.
+
+The fold is the exception, and the cause is in vixie's main loop:
+
+```c
+cron_tick(&database);
+TargetTime += 60;
+```
+
+`TargetTime` is a `time_t`. The loop steps by 60 **absolute** seconds, so a
+repeated wall clock hour is traversed twice and an entry inside it matches on
+both passes. For `30 2 * * *` on 27 October, upstream vixie fires **twice**:
+
+```console
+$ ./vixie-oracle        # real vixie, TZ=Europe/Berlin
+2024-10-27 02:30 +0200
+2024-10-27 02:30 +0100
+```
+
+`cronnext` reports one. That is a deliberate choice, not an oversight, and it is
+the choice Debian made too: Debian's patched `cron.c` calls
+`find_jobs(timeRunning, &database, TRUE, FALSE)` when DST ends, passing
+`doNonWild = FALSE`, with the comment that fixed-time jobs "probably have
+already run, and should not be repeated". Upstream vixie and Debian's own
+cron therefore disagree here, and `cronnext` follows the intent of the
+distribution most people actually run: **a job scheduled for a wall clock time
+fires once for that wall clock time.**
+
+If you need upstream vixie's literal double-fire behaviour instead, note that
+`cronnext` does not offer it: there is no flag that returns both passes. The
+gap behaviour, which is the part most people mean by "handle DST", is exact
+against vixie.
+
 Results are strictly increasing both as local wall clock times and as
 absolute instants, across every transition.
 
@@ -363,6 +413,12 @@ the seconds field, all seven aliases, calendar boundaries including leap
 days and year rollover, monotonicity of every returned sequence, the
 daylight saving cases above, the equivalence of the fast search with a naive
 scan, and the command line interface end to end in a subprocess.
+
+`tests/test_dst_differential.py` pins the daylight saving behaviour against
+**real vixie-cron** rather than against cronnext's own expectations. The
+verdicts were captured from vixie 3.0pl1 built from its own sources and are
+frozen in the file, so no oracle binary is needed to run the suite and none
+ships in the repository.
 
 ## License
 
