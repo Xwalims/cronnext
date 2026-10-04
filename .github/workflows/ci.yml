@@ -27,3 +27,12 @@ jobs:
 
       - name: Run tests
         run: python -m unittest discover -s tests -t . -v
+
+      # cron is not a dependency of this project.  ubuntu-latest ships the
+      # cron package, so the cross-check gets a real vixie-cron oracle here;
+      # it exits 0 with a message when no crontab binary is present.
+      - name: Cross-check against the real vixie cron
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq cron
+          python scripts/cross-check-cron.py

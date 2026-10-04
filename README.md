@@ -420,6 +420,48 @@ verdicts were captured from vixie 3.0pl1 built from its own sources and are
 frozen in the file, so no oracle binary is needed to run the suite and none
 ships in the repository.
 
+### Cross-check against the installed cron
+
+`tests/vixie_oracle.py` is a hand transcription of vixie's `entry.c`. It shares
+no code with the library, which is what makes it useful, but it is still a
+*reading* of the C — a shared misreading would pass every differential test in
+the suite. `scripts/cross-check-cron.py` closes that gap by asking the installed
+daemon instead:
+
+```console
+$ python3 scripts/cross-check-cron.py
+oracle: /usr/bin/crontab
+
+4 documented extension(s) differ from vixie by design: day of week '1-0', day of week '7-0', day of week '7-6', month 'DEC-FEB'
+
+145 cases agree with the real daemon
+```
+
+The oracle is `crontab(1)` driven with `-x pars`, which runs the real
+`entry.c` and prints every `set_element()` and `set_range()` call, so the exact
+bit set cron built for a field is recovered rather than inferred. Each of the
+five fields has a distinct `(low, high)` signature, so the trace can be split
+per field without putting a marker in the crontab. Two things are compared: the
+value set each field expands to, and the firing days `next_after()` returns
+across a whole leap year, which exercises parsing, expansion, the
+day-of-month/day-of-week star rule, Sunday normalisation and the forward search
+in one shot.
+
+The descending ranges listed above are reported as extensions rather than as
+failures, because cronnext deliberately differs from vixie there.
+
+cron is **not** a dependency of this project. With no `crontab` binary the
+script says so and exits 0, and if the spool cannot be driven at all it says
+that and exits 0, so it is safe to wire into CI anywhere.
+
+Note that `crontab(1)` cannot parse a file without installing it, so every
+probe overwrites the caller's crontab. The script saves the caller's own
+crontab before the first probe and restores it after each one, so running it
+never leaves your jobs changed or deleted.
+
+CI runs it after the unit tests on `ubuntu-latest`, which ships the `cron`
+package.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
